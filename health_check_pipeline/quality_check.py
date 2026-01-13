@@ -1,11 +1,9 @@
 from .base_check import BaseCheck
-
-from PIL import Image
-import numpy as np
-import os
-import string
-
-from concurrent.futures import (
+from common_imports import (
+    Image,
+    np,
+    os,
+    string,
     ThreadPoolExecutor,
     ProcessPoolExecutor,
     as_completed,
@@ -13,6 +11,16 @@ from concurrent.futures import (
 
 
 class QualityCheck(BaseCheck):
+    def penalty(self) -> int:
+        """Penalty: 2 points per suspicious sample, up to 20."""
+        suspicious = self.report_maker.report_data["sections"].get(
+            "suspicious_samples", {}
+        )
+        total_suspicious = sum(
+            v.get("count", 0) for k, v in suspicious.items() if k != "examples"
+        )
+        return min(total_suspicious * 2, 20)
+
     def __init__(
         self,
         dataset_tree,

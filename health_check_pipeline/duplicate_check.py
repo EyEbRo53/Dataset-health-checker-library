@@ -1,10 +1,13 @@
-import hashlib
-from collections import deque
-
 from .base_check import BaseCheck
+from common_imports import hashlib, deque
 
 
 class DuplicateCheck(BaseCheck):
+    def penalty(self) -> int:
+        """Penalty: 2 points per duplicate file, up to 20."""
+        dups = self.report_maker.report_data["sections"].get("duplicates", {})
+        return min(dups.get("total_duplicates", 0) * 2, 20)
+
     def __init__(self, dataset_tree):
         super().__init__(dataset_tree, "Duplicate Check")
 

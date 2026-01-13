@@ -1,6 +1,5 @@
 from .base_check import BaseCheck
-import os
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from common_imports import os, ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 
 try:
     from PIL import Image
@@ -11,6 +10,11 @@ except ImportError:
 
 
 class CorruptFileCheck(BaseCheck):
+    def penalty(self) -> int:
+        """Penalty: 3 points per corrupt file, up to 20."""
+        corrupt = self.report_maker.report_data["sections"].get("corrupt_files", [])
+        return min(len(corrupt) * 3, 20)
+
     def __init__(self, dataset_tree, max_threads=8, max_processes=4):
         """
         :param dataset_tree: DatasetTree object

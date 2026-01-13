@@ -3,6 +3,13 @@ from datetime import datetime
 import time
 import tracemalloc
 
+from rich.console import Console
+from rich.table import Table
+from rich.tree import Tree
+from rich.panel import Panel
+from rich.text import Text
+from rich.align import Align
+
 
 class ReportMaker:
     """
@@ -273,12 +280,15 @@ class ReportMaker:
             divider()
             for c in classes:
                 pct = c.get("percentage", 0)
-                if isinstance(pct, (int, float)):
-                    pct = f"{pct:.1f}%"
+                try:
+                    pct_val = float(pct)
+                except (ValueError, TypeError):
+                    pct_val = 0.0
+                pct_str = f"{pct_val:.1f}%"
                 line(
                     f"{c.get('name', 'N/A'):<20} "
                     f"{c.get('count', 0):<12} "
-                    f"{pct:<12} "
+                    f"{pct_str:<12} "
                     f"{c.get('status', 'OK'):<15}"
                 )
 
@@ -384,6 +394,200 @@ class ReportMaker:
         line("=" * 50)
 
         return "\n".join(out)
+
+    #
+    # Rich Report Rendering
+    #
+    def print_pipeline_header(self, title="Health Check Report"):
+        """
+        Prints a fancy header for pipeline sections using Rich.
+
+        :param title: The title text to display
+        """
+
+        console = Console()
+
+        panel = Panel(
+            Align.center(f"[bold green]{title}[/bold green]", vertical="middle"),
+            border_style="bright_blue",
+            padding=(1, 4),
+            expand=True,
+        )
+        console.print(panel)
+
+    def render_dataset_tree(self, root_node):
+        """
+        Render a dataset tree using Rich.
+
+        :param root_node: root Node of the DatasetTree
+        """
+        console = Console()
+
+        def add_node(rich_tree, node):
+            # check if this folder directly contains files
+            has_files = any(child.is_file for child in node.children)
+
+            # add this node to the Rich tree
+            branch = rich_tree.add(node.name)
+
+            # stop recursion if folder directly contains files
+            if has_files:
+                return
+
+            for child in node.children:
+                if not child.is_file:
+                    add_node(branch, child)
+
+        rich_tree = Tree(f"[bold blue]{root_node.name}[/bold blue]")
+        add_node(rich_tree, root_node)
+        console.print(rich_tree)
+
+    def generate_rich_report(self):
+        console = Console()
+        r = self.report_data
+        s = r["sections"]
+
+        # Header
+        console.rule("[bold cyan]DATASET HEALTH CHECK[/bold cyan]")
+
+        # Dataset Path
+        if r["dataset_path"]:
+            console.print(f"[bold]Dataset Path:[/bold] {r['dataset_path']}\n")
+
+        # Summary
+        if s["summary"]:
+            console.print(Panel.fit("[bold green]Scan Summary[/bold green]"))
+            for k, v in s["summary"].items():
+                console.print(f"[green]{k.replace('_', ' ').title():<25}[/green] : {v}")
+            console.print()
+
+        # Class Distribution Tree
+        classes = s["class_distribution"]["classes"]
+        if classes:
+            console.rule("[bold magenta]CLASS DISTRIBUTION[/bold magenta]")
+
+            tree = Tree("[bold]Dataset Classes[/bold]")
+            for c in classes:
+                pct = c.get("percentage", 0)
+                try:
+                    pct_val = float(pct)
+                except (ValueError, TypeError):
+                    pct_val = 0.0
+                node_text = f"{c.get('name', 'N/A')} ({c.get('count', 0)} images, {pct_val:.1f}%) [{c.get('status', 'OK')}]"
+                tree.add(node_text)
+            console.print(tree)
+            console.print()
+
+            # Table
+            table = Table(title="Class Distribution Details")
+            table.add_column("Class Name", style="cyan")
+            table.add_column("Images", justify="right")
+            table.add_column("Percentage", justify="right")
+            table.add_column("Status", style="magenta")
+
+            for c in classes:
+                # Ensure percentage is a float
+                pct = c.get("percentage", 0)
+                try:
+                    pct_val = float(
+                        str(pct).replace("%", "")
+                    )  # Remove % if it's a string
+                except (ValueError, TypeError):
+                    pct_val = 0.0
+
+                table.add_row(
+                    c.get("name", "N/A"),
+                    str(c.get("count", 0)),
+                    f"{pct_val:.1f}%",
+                    c.get("status", "OK"),
+                )
+
+            console.print(table)
+
+            ratio = s["class_distribution"].get("imbalance_ratio")
+            if ratio is not None:
+                console.print(
+                    f"\n[bold yellow]Imbalance Ratio (Max / Min):[/bold yellow] {ratio:.2f}"
+                )
+            console.print()
+
+        # Duplicates
+        dup = s.get("duplicates")
+        if dup:
+            console.rule("[bold red]DUPLICATE FILES[/bold red]")
+            console.print(f"Duplicate Groups Found: {dup.get('groups_found', 0)}")
+            console.print(f"Total Duplicate Files : {dup.get('total_duplicates', 0)}\n")
+
+            examples = dup.get("examples", [])
+            for idx, ex in enumerate(examples[:5], start=1):
+                panel_text = (
+                    f"[bold]Group {idx}[/bold]\nHash: {ex.get('hash', 'N/A')}\nFiles:\n"
+                    + "\n".join(f"  - {f}" for f in ex.get("files", []))
+                )
+                console.print(Panel(panel_text, style="red"))
+
+        # Corrupt files
+        corrupt = s.get("corrupt_files", [])
+        if corrupt:
+            console.rule("[bold red]CORRUPT FILES[/bold red]")
+            console.print(f"Corrupt Files Found: {len(corrupt)}\n")
+            for f in corrupt:
+                console.print(f"  - [red]{f['file_path']}[/red] ({f['reason']})")
+            console.print()
+
+        # Suspicious samples
+        suspicious = s.get("suspicious_samples")
+        if suspicious:
+            console.rule("[bold yellow]SUSPICIOUS SAMPLES[/bold yellow]")
+            for k, v in suspicious.items():
+                if k == "examples":
+                    continue
+                console.print(
+                    f"[yellow]{k.replace('_', ' ').title():<25}[/yellow] : {v.get('count', 0)}"
+                )
+
+            examples = suspicious.get("examples")
+            if examples:
+                console.print("\nExample Issues:")
+                for e in examples[:5]:
+                    console.print(f"  - {e}")
+            console.print()
+
+        # Recommendations
+        recs = s.get("recommendations")
+        if recs:
+            console.rule("[bold cyan]RECOMMENDATIONS[/bold cyan]")
+            for i, r_text in enumerate(recs, 1):
+                console.print(f"{i}. {r_text}")
+            console.print()
+
+        # Health score
+        console.rule("[bold green]OVERALL DATASET HEALTH SCORE[/bold green]")
+        score = r["health_score"]["score"]
+        status_color = "green" if score >= 80 else "yellow" if score >= 50 else "red"
+        status_text = (
+            "✓ Healthy"
+            if score >= 80
+            else "⚠ Needs Attention" if score >= 50 else "❌ Critical"
+        )
+        console.print(
+            f"Score : [bold {status_color}]{score}[/bold {status_color}] / 100"
+        )
+        console.print(
+            f"Status: [bold {status_color}]{status_text}[/bold {status_color}]\n"
+        )
+
+        # Performance log
+        if self._perf_log:
+            console.rule("[bold blue]PERFORMANCE LOG[/bold blue]")
+            for entry in self._perf_log:
+                console.print(
+                    f"[cyan]{entry['task']:<30}[/cyan] : {entry['duration_sec']:.4f} sec, {entry['memory_peak_mb']:.2f} MB peak"
+                )
+            console.print()
+            self.append_performance_log_to_file()
+
+        console.rule("[bold cyan]END OF REPORT[/bold cyan]")
 
     def save_text_report(self, file_path: str):
         with open(file_path, "w") as f:

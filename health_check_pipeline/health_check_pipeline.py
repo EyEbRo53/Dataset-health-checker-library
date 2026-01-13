@@ -25,14 +25,24 @@ class HealthCheckPipeline:
     # ------------------------------------------------
     # Run all configured checks
     # ------------------------------------------------
-    def run_all(self):
+    def run_all(self) -> dict:
+        """Run all configured checks and calculate health score."""
+        total_penalty = 0
+        penalties = {}
         results = {}
 
         for check_class in self.checks:
             check = check_class(self.dataset_tree)
             check.report_maker = self.report
             results[check_class.__name__] = check.run()
+            penalty = 0
+            if hasattr(check, "penalty"):
+                penalty = check.penalty()
+            penalties[check_class.__name__] = penalty
+            total_penalty += penalty
 
+        score = max(0, 100 - total_penalty)
+        self.report.set_health_score(score, penalties)
         self.report.finalize_scan()
         return results
 

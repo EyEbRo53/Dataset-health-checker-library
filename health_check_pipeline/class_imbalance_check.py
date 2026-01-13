@@ -1,8 +1,16 @@
-from collections import deque
 from .base_check import BaseCheck
+from common_imports import deque
 
 
 class ClassImbalanceCheck(BaseCheck):
+    def penalty(self) -> int:
+        """Penalty: 5 points per class with '⚠ Low Count' status."""
+        classes = self.report_maker.report_data["sections"]["class_distribution"].get(
+            "classes", []
+        )
+        low_count = sum(1 for c in classes if c.get("status") == "⚠ Low Count")
+        return low_count * 5
+
     def __init__(self, dataset_tree):
         super().__init__(dataset_tree, "Class Imbalance Check")
 

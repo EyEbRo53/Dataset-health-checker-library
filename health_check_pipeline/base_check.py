@@ -1,6 +1,3 @@
-from report_maker import ReportMaker
-
-
 class BaseCheck:
     def __init__(self, dataset_tree, check_name=None):
         """
@@ -22,3 +19,7 @@ class BaseCheck:
         :return: result dictionary
         """
         raise NotImplementedError("Each check must implement the run method.")
+
+    def penalty(self) -> int:
+        """Return the penalty for this check (default 0). Override in subclasses."""
+        return 0

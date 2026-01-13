@@ -37,11 +37,7 @@ def main(folder_path):
         sys.exit(1)
 
     tree = DatasetTree()
-    tree.build_dataset_tree(folder_path)
-
-    print("\n" + "=" * 50)
-    print("Running Health Check Pipeline...")
-    print("=" * 50 + "\n")
+    root_node = tree.build_dataset_tree(folder_path)
 
     # --------------------------------------------
     # Optional: user-selected checks
@@ -73,8 +69,9 @@ def main(folder_path):
     # Output
     # --------------------------------------------
     report = pipeline.get_report()
-    tree.print_tree()
-    print(report.generate_text_report())
+    report.print_pipeline_header()
+    report.render_dataset_tree(root_node)
+    print(report.generate_rich_report())
 
 
 if __name__ == "__main__":
