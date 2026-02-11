@@ -133,7 +133,11 @@ class ReportMaker:
                 suspicious[key] = {"count": 0}
             suspicious[key]["count"] += 1
 
-        suspicious["examples"] = examples[:5]  # store first 5 examples only
+        suspicious["examples"] = examples[:5]  # store first 5 examples only for display
+        
+        # Store full details for JSON and cleaning
+        suspicious["details"] = [{"file_path": f, "issue": i} for f, i in issues]
+        
         self.report_data["sections"]["suspicious_samples"] = suspicious
         self._update_timestamp()
 
@@ -192,32 +196,14 @@ class ReportMaker:
     # ------------------------------------------------------------------
     # At the end, append performance log to logs.txt
 
-    def append_performance_log_to_file(self):
-        """
-        Appends the performance log to logs.txt in the required format.
-        """
-        if not self._perf_log:
-            return
-        duration = self.report_data["sections"]["summary"].get("scan_duration", "N/A")
-        lines = []
-        lines.append(f"Scan Duration             : {duration}")
-        lines.append("--------------------------------------------------")
-        lines.append("PERFORMANCE LOG")
-        lines.append("--------------------------------------------------")
-        for entry in self._perf_log:
-            lines.append(
-                f"{entry['task']:<30} : {entry['duration_sec']:.4f} sec, {entry['memory_peak_mb']:.2f} MB peak"
-            )
-        lines.append("")
-        with open("logs.txt", "a") as f:
-            f.write("\n".join(lines) + "\n")
+    # ------------------------------------------------------------------
+    # Text Report Rendering
+    # ------------------------------------------------------------------
 
-    def generate_text_report(self) -> str:
-
+    def _generate_full_text(self) -> str:
+        """Generates a detailed text report with ALL findings."""
         r = self.report_data
         s = r["sections"]
-        # print(self.report_data["sections"])
-
         out = []
 
         def line(text=""):
@@ -227,173 +213,214 @@ class ReportMaker:
             out.append("-" * 50)
 
         line("=" * 50)
-        line("DATASET HEALTH CHECK REPORT")
+        line("DATASET HEALTH CHECK REPORT (DETAILED)")
         line("=" * 50)
-        line()
-
+        line(f"Date: {r['created_at']}")
         if r["dataset_path"]:
-            line("Dataset Path:")
-            line(f"  {r['dataset_path']}")
-            line()
+            line(f"Dataset Path: {r['dataset_path']}")
+        line()
 
         # Summary
         if s["summary"]:
-            line("Scan Summary:")
+            line("SCAN SUMMARY")
+            divider()
             for k, v in s["summary"].items():
-                line(f"  {k.replace('_', ' ').title():<25} : {v}")
+                line(f"{k.replace('_', ' ').title():<25} : {v}")
             line()
 
         # Class Distribution
         classes = s["class_distribution"]["classes"]
-        if classes is not None:
-            divider()
+        if classes:
             line("CLASS DISTRIBUTION")
             divider()
-
-            # Build tree structure from all paths
-            tree = {}
             for c in classes:
-                if c.get("path"):
-                    path_parts = c.get("path").split(" > ")
-                    current = tree
-                    for i, part in enumerate(path_parts):
-                        if part not in current:
-                            current[part] = {}
-                        current = current[part]
-
-            # Render tree
-            def render_tree(node, indent=0):
-                for i, (key, subtree) in enumerate(node.items()):
-                    is_last = i == len(node) - 1
-                    prefix = "|-- " if indent > 0 else ""
-                    line("    " * indent + prefix + key)
-                    if subtree:
-                        render_tree(subtree, indent + 1)
-
-            if tree:
-                render_tree(tree)
-            line()
-
-            # Then show table
-            divider()
-            line(f"{'Class Name':<20} {'Images':<12} {'Percentage':<12} {'Status':<15}")
-            divider()
-            for c in classes:
-                pct = c.get("percentage", 0)
-                try:
-                    pct_val = float(pct)
-                except (ValueError, TypeError):
-                    pct_val = 0.0
-                pct_str = f"{pct_val:.1f}%"
-                line(
-                    f"{c.get('name', 'N/A'):<20} "
-                    f"{c.get('count', 0):<12} "
-                    f"{pct_str:<12} "
-                    f"{c.get('status', 'OK'):<15}"
-                )
-
+                pct = c.get("percentage", "0%")
+                line(f"{c.get('name', 'N/A'):<30} | {c.get('count', 0):<10} | {pct:<10} | {c.get('status', 'OK')}")
+            
             ratio = s["class_distribution"].get("imbalance_ratio")
             if ratio is not None:
-                line()
-                line(f"Imbalance Ratio (Max / Min): {ratio:.2f}")
+                line(f"\nImbalance Ratio: {ratio:.2f}")
             line()
 
         # Duplicates
-        dup = s["duplicates"]
-        if dup is not None:
-            divider()
+        dup = s.get("duplicates")
+        if dup:
             line("DUPLICATE FILES")
             divider()
-            line(f"Duplicate Groups Found: {dup.get('groups_found', 0)}")
-            line(f"Total Duplicate Files : {dup.get('total_duplicates', 0)}")
-
+            line(f"Groups: {dup.get('groups_found', 0)}")
+            line(f"Total Duplicates: {dup.get('total_duplicates', 0)}")
+            
             examples = dup.get("examples", [])
             if examples:
-                line()
-                line("Duplicate Groups (showing up to 5 examples):")
-                for idx, ex in enumerate(examples[:5], start=1):  # show only first 5
-                    line(f"\n  Group {idx}:")
-                    line(f"    Hash: {ex.get('hash', 'N/A')}")
-                    line("    Files:")
+                line("\nAll Duplicate Groups:")
+                for idx, ex in enumerate(examples, 1):
+                    line(f"\nGroup {idx} (Hash: {ex.get('hash', 'N/A')}):")
                     for f in ex.get("files", []):
-                        line(f"      - {f}")
+                        line(f"  - {f}")
             line()
 
         # Corrupt files
-        corrupt = s["corrupt_files"]
-        if corrupt is not None:
-            divider()
+        corrupt = s.get("corrupt_files")
+        if corrupt:
             line("CORRUPT FILES")
             divider()
-            line(f"Corrupt Files Found: {len(corrupt)}")
+            line(f"Total: {len(corrupt)}")
+            for f in corrupt:
+                line(f"  - {f['file_path']} ({f['reason']})")
             line()
-            if corrupt:
-                line("Corrupt files:")
-                for f in corrupt:
-                    line(f"  - {f['file_path']} ({f['reason']})")
-                line()
 
         # Suspicious samples
-        suspicious = s["suspicious_samples"]
+        suspicious = s.get("suspicious_samples")
         if suspicious:
-            divider()
             line("SUSPICIOUS SAMPLES")
             divider()
             for k, v in suspicious.items():
-                if k == "examples":
-                    continue
+                if k == "examples": continue
                 line(f"{k.replace('_', ' ').title():<25} : {v.get('count', 0)}")
-            examples = suspicious.get("examples")
+            
+            examples = suspicious.get("examples", [])
             if examples:
-                line()
-                line("Example Issues:")
-                for e in examples[:5]:
+                line("\nAll Suspicious Samples:")
+                for e in examples:
                     line(f"  - {e}")
             line()
 
-        # Recommendations
-        recs = s["recommendations"]
-        if recs:
-            divider()
-            line("RECOMMENDATIONS")
-            divider()
-            for i, r in enumerate(recs, 1):
-                line(f"{i}. {r}")
-            line()
+        # Score
+        line("HEALTH SCORE")
+        divider()
+        line(f"Score: {r['health_score']['score']} / 100")
+        
+        return "\n".join(out)
 
-        # Health score
-        divider()
-        line("OVERALL DATASET HEALTH SCORE")
-        divider()
-        score = r["health_score"]["score"]
-        status = (
-            "✓ Healthy"
-            if score >= 80
-            else "⚠ Needs Attention" if score >= 50 else "❌ Critical"
-        )
-        line(f"Score: {score} / 100")
-        line(f"Status: {status}")
+    # ------------------------------------------------------------------
+    # Markdown Report Rendering
+    # ------------------------------------------------------------------
+
+    def _generate_full_markdown(self) -> str:
+        """Generates a detailed, pretty markdown report."""
+        r = self.report_data
+        s = r["sections"]
+        out = []
+
+        def line(text=""):
+            out.append(text)
+
+        # Title
+        line(f"# Dataset Health Check Report")
+        line(f"> **Date:** {r['created_at']}  ")
+        line(f"> **Dataset:** `{r['dataset_path']}`  ")
         line()
 
-        # add logs
-        if self._perf_log:
-            divider()
-            line("PERFORMANCE LOG")
-            divider()
-            for entry in self._perf_log:
-                line(
-                    f"{entry['task']:<30} : "
-                    f"{entry['duration_sec']:.4f} sec, "
-                    f"{entry['memory_peak_mb']:.2f} MB peak"
-                )
-            line()
-            self.append_performance_log_to_file()
+        # Score formatted nicely
+        score = r["health_score"]["score"]
+        status = "✅ Healthy" if score >= 80 else "⚠ Needs Attention" if score >= 50 else "❌ Critical"
+        line(f"## Overall Health Score: {score} / 100")
+        line(f"**Status:** {status}")
+        line()
 
-        line("=" * 50)
-        line("END OF REPORT")
-        line("=" * 50)
+        # Summary Table
+        if s["summary"]:
+            line("## Scan Summary")
+            line("| Metric | Value |")
+            line("|:---|:---|")
+            for k, v in s["summary"].items():
+                line(f"| {k.replace('_', ' ').title()} | {v} |")
+            line()
+
+        # Class Distribution Table
+        classes = s["class_distribution"]["classes"]
+        if classes:
+            line("## Class Distribution")
+            line("| Class Name | Images | Percentage | Status |")
+            line("|:---|---:|---:|:---|")
+            for c in classes:
+                line(f"| {c.get('name')} | {c.get('count')} | {c.get('percentage')} | {c.get('status')} |")
+            
+            ratio = s["class_distribution"].get("imbalance_ratio")
+            if ratio:
+                line(f"\n**Imbalance Ratio:** {ratio:.2f}")
+            line()
+
+        # Duplicates
+        dup = s.get("duplicates")
+        if dup and dup.get("examples"):
+            line("## Duplicate Files")
+            line(f"- **Total Duplicates:** {dup.get('total_duplicates', 0)}")
+            line(f"- **Duplicate Groups:** {dup.get('groups_found', 0)}")
+            line()
+            
+            line("### Examples")
+            for idx, ex in enumerate(dup["examples"], 1):
+                line(f"#### Group {idx} (Hash: `{ex.get('hash')}`)")
+                for f in ex.get("files", []):
+                    line(f"- `{f}`")
+            line()
+
+        # Corrupt Files
+        corrupt = s.get("corrupt_files")
+        if corrupt:
+            line("## Corrupt Files")
+            line(f"**Total Found:** {len(corrupt)}")
+            line()
+            line("| File Path | Reason |")
+            line("|:---|:---|")
+            for f in corrupt:
+                line(f"| `{f['file_path']}` | {f['reason']} |")
+            line()
+
+        # Suspicious Samples
+        suspicious = s.get("suspicious_samples")
+        if suspicious:
+            line("## Suspicious Samples")
+            line("| Issue Type | Count |")
+            line("|:---|---:|")
+            for k, v in suspicious.items():
+                if k in ["examples", "details"]: continue
+                line(f"| {k.replace('_', ' ').title()} | {v.get('count', 0)} |")
+            line()
+            
+            details = suspicious.get("details", [])
+            if details:
+                line("### All Issues")
+                line("| File Path | Issue |")
+                line("|:---|:---|")
+                for d in details:
+                    line(f"| `{d['file_path']}` | {d['issue']} |")
+            line()
+
+        # Recommendations
+        recs = s.get("recommendations")
+        if recs:
+            line("## Recommendations")
+            for i, r_text in enumerate(recs, 1):
+                line(f"{i}. {r_text}")
+            line()
+            
+        # Performance Log
+        if self._perf_log:
+            line("## Performance Log")
+            line("| Task | Duration (sec) | Peak Memory (MB) |")
+            line("|:---|---:|---:|")
+            for entry in self._perf_log:
+                line(f"| {entry['task']} | {entry['duration_sec']:.4f} | {entry['memory_peak_mb']:.2f} |")
+            line()
 
         return "\n".join(out)
+
+    def save_report(self, file_path: str):
+        """Saves the report to the specified file path."""
+        if file_path.endswith(".json"):
+            self.save_to_json(file_path)
+        elif file_path.endswith(".md"):
+            content = self._generate_full_markdown()
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(content)
+        else:
+            # Default to text
+            content = self._generate_full_text()
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(content)
+
 
     #
     # Rich Report Rendering
@@ -540,7 +567,7 @@ class ReportMaker:
         if suspicious:
             console.rule("[bold yellow]SUSPICIOUS SAMPLES[/bold yellow]")
             for k, v in suspicious.items():
-                if k == "examples":
+                if k in ["examples", "details"]:
                     continue
                 console.print(
                     f"[yellow]{k.replace('_', ' ').title():<25}[/yellow] : {v.get('count', 0)}"
@@ -585,7 +612,6 @@ class ReportMaker:
                     f"[cyan]{entry['task']:<30}[/cyan] : {entry['duration_sec']:.4f} sec, {entry['memory_peak_mb']:.2f} MB peak"
                 )
             console.print()
-            self.append_performance_log_to_file()
 
         console.rule("[bold cyan]END OF REPORT[/bold cyan]")
 

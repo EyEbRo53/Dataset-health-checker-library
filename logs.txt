@@ -1,9 +1,0 @@
-Scan Duration             : 0:00:39.460751
---------------------------------------------------
-PERFORMANCE LOG
---------------------------------------------------
-Class Imbalance Check          : 0.0189 sec, 0.01 MB peak
-Duplicate Check                : 2.0238 sec, 4.78 MB peak
-Corrupt File Check             : 5.8409 sec, 47.07 MB peak
-Quality Check                  : 31.3569 sec, 55.42 MB peak
-

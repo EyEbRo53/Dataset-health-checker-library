@@ -17,7 +17,7 @@ class QualityCheck(BaseCheck):
             "suspicious_samples", {}
         )
         total_suspicious = sum(
-            v.get("count", 0) for k, v in suspicious.items() if k != "examples"
+            v.get("count", 0) for k, v in suspicious.items() if k not in ["examples", "details"]
         )
         return min(total_suspicious * 2, 20)
 
