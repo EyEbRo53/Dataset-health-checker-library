@@ -1,5 +1,5 @@
-from .base_check import BaseCheck
-from common_imports import os, ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from dataset_health.core.base import BaseCheck
+from dataset_health.utils.common import os, ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 
 try:
     from PIL import Image

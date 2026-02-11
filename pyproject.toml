@@ -5,4 +5,4 @@ description = "Zero-config dataset health checks for ML datasets"
 dependencies = ["Pillow", "numpy"]
 
 [project.scripts]
-dataset-health-check = "dataset_health_checker.cli:main"
+dataset-health-check = "dataset_health.cli:main"

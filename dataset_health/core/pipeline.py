@@ -1,13 +1,17 @@
-from .class_imbalance_check import ClassImbalanceCheck
-from .duplicate_check import DuplicateCheck
-from .corrupt_file_check import CorruptFileCheck
-from .quality_check import QualityCheck
+from typing import List, Type, Dict, Any
 
-from report_maker import ReportMaker
+from dataset_health.checks.class_imbalance import ClassImbalanceCheck
+from dataset_health.checks.duplicates import DuplicateCheck
+from dataset_health.checks.corrupt_files import CorruptFileCheck
+from dataset_health.checks.quality import QualityCheck
+
+from dataset_health.core.report import ReportMaker
+from dataset_health.core.dataset import DatasetTree
+from dataset_health.core.base import BaseCheck
 
 
 class HealthCheckPipeline:
-    def __init__(self, dataset_tree, checks=None):
+    def __init__(self, dataset_tree: DatasetTree, checks: List[Type[BaseCheck]] = None):
         self.dataset_tree = dataset_tree
 
         self.checks = checks or [
@@ -21,6 +25,12 @@ class HealthCheckPipeline:
             "Dataset Health Check Report",
             dataset_tree.root.path,
         )
+
+    def add_check(self, check_class: Type[BaseCheck]):
+        """Register a new check class to the pipeline."""
+        if check_class not in self.checks:
+            self.checks.append(check_class)
+
 
     # ------------------------------------------------
     # Run all configured checks

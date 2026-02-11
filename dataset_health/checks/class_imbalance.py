@@ -1,5 +1,5 @@
-from .base_check import BaseCheck
-from common_imports import deque
+from dataset_health.core.base import BaseCheck
+from dataset_health.utils.common import deque
 
 
 class ClassImbalanceCheck(BaseCheck):

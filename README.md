@@ -44,16 +44,70 @@ The Health Check Pipeline includes:
 ## Usage
 
 ```bash
-python3 main.py <dataset_folder> (class_imbalance, corrupt_file, duplicate, quality)
+from dataset_health import DatasetTree, HealthCheckPipeline, BaseCheck
+
+# 1. Build dataset tree
+tree = DatasetTree()
+root = tree.build_dataset_tree("/path/to/dataset")
+
+# 2. Initialize pipeline
+pipeline = HealthCheckPipeline(tree)
+
+# 3. Add custom check (Optional)
+class MyCustomCheck(BaseCheck):
+    def run(self):
+        return {"status": "Passed"}
+
+pipeline.add_check(MyCustomCheck)
+
+# 4. Run checks
+results = pipeline.run_all()
+
+# 5. Generate report
+report = pipeline.get_report()
+print(report.generate_rich_report())
+
 ```
 
-- Specify which checks to run as a comma-separated list in parentheses.
-- If no checks are specified, all are run by default.
+running directly from folder:
+```bash
+python3 main.py /path/to/dataset
+```
 
-## Example
+running as a package
+```bash
+dataset-health-check /path/to/dataset
+```
+
+## Running Specific Checks
+
+You can choose to run only specific checks instead of the full suite.
+
+### Via CLI
+
+Pass the check names as a comma-separated list (parentheses optional):
 
 ```bash
-python3 main.py ./my_data (class_imbalance, duplicate)
+# Run only duplicate and quality checks
+dataset-health-check /path/to/dataset "(duplicate, quality)"
+```
+
+**Available checks:** `class_imbalance`, `duplicate`, `corrupt_file`, `quality`
+
+### Via Code
+
+Pass the list of check classes to the pipeline:
+
+```python
+from dataset_health import DatasetTree, HealthCheckPipeline
+from dataset_health.checks.duplicates import DuplicateCheck
+
+tree = DatasetTree()
+tree.build_dataset_tree("/path/to/dataset")
+
+# Run ONLY the duplicate check
+pipeline = HealthCheckPipeline(tree, checks=[DuplicateCheck])
+pipeline.run_all()
 ```
 
 ## Potential Killer Feature

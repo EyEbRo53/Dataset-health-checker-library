@@ -1,5 +1,5 @@
-from .base_check import BaseCheck
-from common_imports import hashlib, deque
+from dataset_health.core.base import BaseCheck
+from dataset_health.utils.common import hashlib, deque
 
 
 class DuplicateCheck(BaseCheck):

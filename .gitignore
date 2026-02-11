@@ -1,0 +1,16 @@
+# files
+project_idea.md
+
+# folders
+__pycache__/
+.venv/
+.env/
+.vscode/
+.idea/
+.DS_Store
+*.egg-info/
+dist/
+build/
+coverage/
+.pytest_cache/
+logs.txt

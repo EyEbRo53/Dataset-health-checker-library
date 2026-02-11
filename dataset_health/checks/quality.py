@@ -1,5 +1,5 @@
-from .base_check import BaseCheck
-from common_imports import (
+from dataset_health.core.base import BaseCheck
+from dataset_health.utils.common import (
     Image,
     np,
     os,
